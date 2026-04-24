@@ -1,1 +1,0 @@
-Task Failed: <class 'celery.concurrency.solo.TaskPool'> does not implement kill_job

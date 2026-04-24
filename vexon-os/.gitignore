@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+api/venv/
+api/.venv/
+
+# Node / React
+node_modules/
+shell/node_modules/
+dist/
+shell/dist/
+.eslintcache
+
+# Environment Secrets
+.env
+api/.env
+shell/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Docker
+.docker
+db_data/
+redis_data/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+api/logs/
+worker_error.log
+api/celery_error.log
