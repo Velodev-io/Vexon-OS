@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    volumes:
+      - ./api:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./api/.env
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: celery -A celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - ./api:/app
+    env_file:
+      - ./api/.env
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  beat:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    command: celery -A celery_app beat --loglevel=info
+    volumes:
+      - ./api:/app
+    env_file:
+      - ./api/.env
+    deploy:
+      resources:
+        limits:
+          memory: 256M
