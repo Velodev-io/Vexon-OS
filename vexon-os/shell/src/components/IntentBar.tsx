@@ -11,7 +11,8 @@ const IntentBar = ({ sessionId }: { sessionId: string }) => {
 
     setIsLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/intent', {
+      const apiHost = window.location.hostname;
+      const response = await fetch(`http://${apiHost}:8000/intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

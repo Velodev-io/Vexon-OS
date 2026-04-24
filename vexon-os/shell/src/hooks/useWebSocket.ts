@@ -11,9 +11,9 @@ export const useWebSocket = (sessionId: string) => {
 
     const connect = () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // In development we might point to localhost:8000
-      const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
-      const url = `${protocol}//${host}/ws/${sessionId}`
+      // Use the current hostname (Mac Mini IP) but force port 8000 for the API
+      const apiHost = window.location.hostname;
+      const url = `${protocol}//${apiHost}:8000/ws/${sessionId}`
       
       console.log(`Connecting to WebSocket: ${url}`);
       ws.current = new WebSocket(url)
