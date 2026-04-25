@@ -42,8 +42,15 @@ def web_search(query: str):
             if not results:
                 return {"content": "No results found for the query.", "sources": []}
             
-            content = "\n\n".join([f"Source: {r['title']}\nContent: {r['body']}" for r in results])
-            sources = [r['href'] for r in results]
+            # Filter out known spam/shopping domains to keep research high-quality
+            ignored_domains = ["batterygod.com", "amazon.", "ebay.", "flipkart.", "indiamart."]
+            filtered_results = [r for r in results if not any(domain in r.get('href', '').lower() for domain in ignored_domains)]
+            
+            # If everything was filtered, keep at least the top one, otherwise use filtered list
+            final_results = filtered_results if filtered_results else results[:1]
+            
+            content = "\n\n".join([f"Source: {r['title']}\nContent: {r['body']}" for r in final_results])
+            sources = [r['href'] for r in final_results]
             
             return {"content": content, "sources": sources}
     except Exception as e:

@@ -3,7 +3,13 @@ import { useWebSocket } from './hooks/useWebSocket'
 import Shell from './pages/Shell'
 
 function App() {
-  const [sessionId] = useState(() => crypto.randomUUID())
+  const [sessionId] = useState(() => {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    }
+  })
   const { isConnected } = useWebSocket(sessionId)
 
   return (

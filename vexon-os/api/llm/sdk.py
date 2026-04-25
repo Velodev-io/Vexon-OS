@@ -29,8 +29,7 @@ def get_perplexity_client():
     return AsyncOpenAI(api_key=api_key, base_url="https://api.perplexity.ai") if api_key else None
 
 def get_ollama_client():
-    base_url = os.getenv("OLLAMA_BASE_URL")
-    return AsyncOpenAI(api_key="ollama", base_url=f"{base_url}/v1") if base_url else None
+    return os.getenv("OLLAMA_BASE_URL")
 
 async def _call_groq(client, messages, system, stream):
     sys_msg = [{"role": "system", "content": system}] if system else []
@@ -119,6 +118,7 @@ def get_ollama_client():
     return base_url if base_url else None
 
 async def _call_ollama(base_url, messages, system, stream):
+    import json
     sys_msg = [{"role": "system", "content": system}] if system else []
     model = os.getenv("OLLAMA_MODEL", "llama3.2")
     
@@ -129,22 +129,25 @@ async def _call_ollama(base_url, messages, system, stream):
         "options": {"temperature": 0.7}
     }
     
-    # We use httpx directly to bypass any OpenAI library proxy settings
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        if stream:
-            async def generator():
+    if stream:
+        async def generator():
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream("POST", f"{base_url}/api/chat", json=payload) as response:
                     async for line in response.aiter_lines():
                         if line:
-                            data = json.loads(line)
-                            if "message" in data and "content" in data["message"]:
-                                yield data["message"]["content"]
-            return generator()
-        else:
+                            try:
+                                data = json.loads(line)
+                                if "message" in data and "content" in data["message"]:
+                                    yield data["message"]["content"]
+                            except:
+                                continue
+        return generator()
+    else:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(f"{base_url}/api/chat", json=payload)
             data = response.json()
             return data["message"]["content"]
-
+    
 async def call_with_fallback(messages: List[Dict[str, str]], system: str = None, stream: bool = False) -> Union[str, AsyncGenerator[str, None]]:
     providers = [
         ("Ollama", get_ollama_client, _call_ollama),
