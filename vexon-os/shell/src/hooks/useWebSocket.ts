@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStreamStore } from '../store/streamStore'
+import { getToken } from '../lib/auth'
 
 export const useWebSocket = (sessionId: string) => {
   const [isConnected, setIsConnected] = useState(false)
@@ -9,11 +10,19 @@ export const useWebSocket = (sessionId: string) => {
   useEffect(() => {
     if (!sessionId) return
 
-    const connect = () => {
+    let cancelled = false
+    let retryHandle: number | null = null
+
+    const connect = async () => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // Use the current hostname (Mac Mini IP) but force port 8000 for the API
-      const apiHost = window.location.hostname;
-      const url = `${protocol}//${apiHost}:8000/ws/${sessionId}`
+      const apiHost = window.location.hostname
+      const token = getToken()
+      const params = token ? `?token=${encodeURIComponent(token)}` : ''
+      const url = `${protocol}//${apiHost}:8000/ws/${sessionId}${params}`
+
+      if (cancelled) {
+        return
+      }
       
       console.log(`Connecting to WebSocket: ${url}`);
       ws.current = new WebSocket(url)
@@ -35,17 +44,24 @@ export const useWebSocket = (sessionId: string) => {
       ws.current.onclose = () => {
         setIsConnected(false)
         console.log('WS Disconnected, retrying in 3s...')
-        setTimeout(connect, 3000)
+        if (!cancelled) {
+          retryHandle = window.setTimeout(() => {
+            void connect()
+          }, 3000)
+        }
       }
     }
 
-    connect()
+    void connect()
 
     return () => {
+      cancelled = true
+      if (retryHandle !== null) {
+        window.clearTimeout(retryHandle)
+      }
       if (ws.current) {
-        // Remove the onclose handler so it doesn't trigger a retry
-        ws.current.onclose = null;
-        ws.current.close();
+        ws.current.onclose = null
+        ws.current.close()
       }
     }
   }, [sessionId, addEvent])

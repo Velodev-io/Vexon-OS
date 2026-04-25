@@ -7,7 +7,10 @@ from sqlalchemy import pool
 from alembic import context
 
 from db.database import Base
-import db.models
+from db.models import AgentLog  # noqa: F401
+from db.models import Session  # noqa: F401
+from db.models import ToolCall  # noqa: F401
+from db.models import User  # noqa: F401
 
 config = context.config
 

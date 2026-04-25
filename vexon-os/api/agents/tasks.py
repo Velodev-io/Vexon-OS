@@ -7,9 +7,7 @@ from .researcher_agent import ResearcherAgent
 def run_agent_task(self, intent, session_id, user_id):
     agent = BaseAgent(session_id, user_id, intent.get("goal", "unknown"))
     try:
-        agent.load_memory()
         result = asyncio.run(agent.execute(intent))
-        agent.save_memory()
         return result
     except Exception as exc:
         agent.set_status(AgentStatus.ERROR)
@@ -19,9 +17,7 @@ def run_agent_task(self, intent, session_id, user_id):
 def run_researcher_task(self, intent, session_id, user_id):
     agent = ResearcherAgent(session_id, user_id, intent.get("goal", intent.get("description", "unknown")))
     try:
-        agent.load_memory()
         result = asyncio.run(agent.execute(intent))
-        agent.save_memory()
         return result
     except Exception as exc:
         agent.set_status(AgentStatus.ERROR)

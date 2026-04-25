@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStreamStore } from '../store/streamStore'
 import { Box, Sparkles, Terminal, Search, Globe, CheckCircle, Loader, ExternalLink } from 'lucide-react'
@@ -17,7 +17,13 @@ const AGENT_COLORS: Record<string, string> = {
 
 const MainCanvas = () => {
   const activeAgents = useStreamStore(state => state.activeAgents)
+  const events = useStreamStore(state => state.events)
   const agentIds = Object.keys(activeAgents)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [events.length])
 
   if (agentIds.length === 0) {
     return (
@@ -203,6 +209,7 @@ const MainCanvas = () => {
           );
         })}
       </AnimatePresence>
+      <div ref={bottomRef} />
     </div>
   )
 }

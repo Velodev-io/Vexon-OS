@@ -1,6 +1,24 @@
 from .registry import register_tool
-from memory.longterm import search_memory
-import os
+from memory.embeddings import encode_text
+from memory.longterm import search_longterm
+from memory.working import load_all_memories
+
+
+def _cosine_similarity(left, right):
+    numerator = sum(a * b for a, b in zip(left, right))
+    left_norm = sum(a * a for a in left) ** 0.5
+    right_norm = sum(b * b for b in right) ** 0.5
+    if not left_norm or not right_norm:
+        return 0.0
+    return float(numerator / (left_norm * right_norm))
+
+
+def _keyword_score(query: str, text: str) -> float:
+    query_words = {word for word in query.lower().split() if word}
+    text_words = {word for word in text.lower().split() if word}
+    if not query_words:
+        return 0.0
+    return len(query_words & text_words) / len(query_words)
 
 @register_tool(
     name="memory_recall",
@@ -14,6 +32,37 @@ import os
     }
 )
 def memory_recall(query: str, user_id: str = None):
-    # This requires an embedding model. For now, we'll assume the embedding is handled.
-    # In a real implementation, we would call an embedding API here.
-    return "Memory recall results would appear here (requires embedding model integration)."
+    if not user_id:
+        return []
+
+    memories = load_all_memories(user_id)
+    if not memories:
+        return search_longterm(user_id, query, top_k=5)
+
+    query_embedding = encode_text(query)
+    scored = []
+
+    for memory in memories:
+        content = memory.get("content")
+        if not content:
+            continue
+
+        score = _keyword_score(query, content)
+        if query_embedding is not None:
+            memory_embedding = encode_text(content)
+            if memory_embedding is not None:
+                score = _cosine_similarity(query_embedding, memory_embedding)
+
+        scored.append((score, content))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    matches = [content for score, content in scored if score > 0][:5]
+
+    if len(matches) < 5:
+        for item in search_longterm(user_id, query, top_k=5):
+            if item not in matches:
+                matches.append(item)
+            if len(matches) == 5:
+                break
+
+    return matches

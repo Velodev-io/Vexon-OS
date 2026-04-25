@@ -1,14 +1,39 @@
 import asyncio
 import json
 import logging
-import redis.asyncio as redis
-from fastapi import WebSocket, WebSocketDisconnect
 import os
+from typing import Optional
+import redis.asyncio as redis
+from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from starlette.websockets import WebSocketState
+
+from auth.local import decode_token
 
 logger = logging.getLogger(__name__)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0").replace("CERT_NONE", "none")
 
+
+async def safe_receive(ws: WebSocket) -> Optional[str]:
+    try:
+        return await asyncio.wait_for(ws.receive_text(), timeout=30.0)
+    except asyncio.TimeoutError:
+        await ws.send_json({"type": "ping"})
+        return None
+    except WebSocketDisconnect:
+        return None
+
+
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4401)
+        return
+    try:
+        decode_token(token)
+    except HTTPException:
+        await websocket.close(code=4401)
+        return
+
     await websocket.accept()
     logger.info(f"WebSocket connected for session {session_id}")
     
@@ -27,14 +52,11 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
                 if isinstance(data, bytes):
                     data = data.decode()
                 await websocket.send_text(data)
-            
-            # Check for client-side disconnects or messages
-            try:
-                # Use a small timeout to avoid blocking the Redis loop
-                await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
-            except asyncio.TimeoutError:
-                pass
-                
+
+            await safe_receive(websocket)
+            if websocket.client_state == WebSocketState.DISCONNECTED:
+                break
+
     except (WebSocketDisconnect, ConnectionResetError):
         logger.info(f"WebSocket disconnected for session {session_id}")
     except Exception as e:
@@ -42,6 +64,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     finally:
         try:
             await pubsub.unsubscribe(channel)
-            await r.close()
-        except:
+            await pubsub.close()
+            await r.aclose()
+        except Exception:
             pass

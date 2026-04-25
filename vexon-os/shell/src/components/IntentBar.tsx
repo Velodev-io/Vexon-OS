@@ -1,31 +1,34 @@
 import React, { useState } from 'react'
 import { Send, Mic, Paperclip, Terminal as TerminalIcon } from 'lucide-react'
+import api from '../lib/api'
 
 const IntentBar = ({ sessionId }: { sessionId: string }) => {
   const [value, setValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!value.trim() || isLoading) return
 
+    const userId = localStorage.getItem('vexon_user_id')
+    if (!userId) {
+      setError('Not logged in')
+      return
+    }
+
     setIsLoading(true)
+    setError(null)
     try {
-      const apiHost = window.location.hostname;
-      const response = await fetch(`http://${apiHost}:8000/intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: value,
-          session_id: sessionId,
-          user_id: 'default-user'
-        })
+      await api.post('/agent/run', {
+        message: value,
+        session_id: sessionId,
+        user_id: userId,
       })
-      if (response.ok) {
-        setValue('')
-      }
+      setValue('')
     } catch (error) {
       console.error('Failed to submit intent', error)
+      setError('Agent failed. Try again.')
     } finally {
       setIsLoading(false)
     }
@@ -34,7 +37,7 @@ const IntentBar = ({ sessionId }: { sessionId: string }) => {
   return (
     <form 
       onSubmit={handleSubmit}
-      className="max-w-4xl mx-auto w-full glass rounded-[24px] border border-white/10 glow p-2 flex items-center gap-2 pointer-events-auto shadow-2xl shadow-black"
+      className="relative max-w-4xl mx-auto w-full glass rounded-[24px] border border-white/10 glow p-2 flex items-center gap-2 pointer-events-auto shadow-2xl shadow-black"
     >
       <div className="flex items-center gap-1 ml-2">
         <button type="button" className="p-2.5 text-white/20 hover:text-white transition-all hover:bg-white/5 rounded-xl">
@@ -49,6 +52,7 @@ const IntentBar = ({ sessionId }: { sessionId: string }) => {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="How can Vexon help you today?"
+        disabled={isLoading}
         className="flex-1 bg-transparent border-none outline-none text-[15px] py-4 px-3 text-white placeholder:text-white/20 font-medium"
       />
 
@@ -70,6 +74,12 @@ const IntentBar = ({ sessionId }: { sessionId: string }) => {
           )}
         </button>
       </div>
+      {(isLoading || error) && (
+        <div className="absolute left-8 bottom-[-28px] flex items-center gap-3 text-xs">
+          {isLoading && <span className="text-white/50">Agent running...</span>}
+          {error && <span className="text-red-400">{error}</span>}
+        </div>
+      )}
     </form>
   )
 }

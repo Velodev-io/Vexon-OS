@@ -56,6 +56,7 @@ class ResearcherAgent(BaseAgent):
 
     async def execute(self, intent: dict):
         goal = intent.get("description", self.goal)
+        await self.load_memory()
 
         # ── AGENT_START ──────────────────────────────────────────────
         self.publish_event("AGENT_START", {"agent_type": self.agent_type, "goal": goal})
@@ -94,6 +95,10 @@ class ResearcherAgent(BaseAgent):
                 "result": content[:500],  # Truncate for UI display
                 "sources": sources
             })
+            await self.save_memory(
+                f"Search query: {query}\nSources: {', '.join(sources[:5])}\nContent: {content[:1000]}",
+                "observation",
+            )
 
             # ── Step 2: Evaluate quality ──────────────────────────────
             if search_count < max_searches:
@@ -142,9 +147,12 @@ class ResearcherAgent(BaseAgent):
                 system=RESEARCHER_SYSTEM_PROMPT,
                 stream=True
             )
+            final_text = ""
             async for token in stream:
                 self.publish_event("stream_token", {"token": token})
                 tokens_used += 1
+                final_text += token
+            await self.save_memory(final_text.strip(), "summary")
         except Exception as e:
             logger.error(f"ResearcherAgent synthesis failed: {e}")
             self.set_status(AgentStatus.ERROR)

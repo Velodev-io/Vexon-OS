@@ -1,15 +1,15 @@
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey, JSON
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import relationship
-import uuid
 import datetime
+import uuid
 
 from .database import Base
+
 
 class User(Base):
     __tablename__ = "users"
 
-    user_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, primary_key=True)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=True)
     display_name = Column(String, nullable=True)
@@ -27,8 +27,8 @@ class User(Base):
 class Session(Base):
     __tablename__ = "sessions"
 
-    session_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    session_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.user_id"), nullable=False, index=True)
     title = Column(String, nullable=True)
     status = Column(String, default="active")
     summary = Column(String, nullable=True)
@@ -42,10 +42,10 @@ class Session(Base):
 class AgentLog(Base):
     __tablename__ = "agent_logs"
 
-    log_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    log_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String, nullable=False)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.session_id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    session_id = Column(String, ForeignKey("sessions.session_id"), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.user_id"), nullable=False, index=True)
     goal = Column(String, nullable=True)
     status = Column(String, nullable=True)
     provider_used = Column(String, nullable=True)
@@ -61,7 +61,7 @@ class AgentLog(Base):
 class ToolCall(Base):
     __tablename__ = "tool_calls"
 
-    call_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    call_id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     agent_id = Column(String, nullable=False)
     tool_name = Column(String, nullable=False)
     input = Column(JSON, nullable=True)

@@ -1,4 +1,5 @@
 import { Wifi, WifiOff } from 'lucide-react'
+import { logout } from '../lib/auth'
 import { useStreamStore } from '../store/streamStore'
 
 const Topbar = ({ isConnected }: { isConnected: boolean }) => {
@@ -33,6 +34,17 @@ const Topbar = ({ isConnected }: { isConnected: boolean }) => {
             </div>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            logout()
+            window.location.assign('/login')
+          }}
+          className="text-[11px] font-medium uppercase tracking-wider text-white/45 hover:text-white transition"
+        >
+          Logout
+        </button>
       </div>
     </header>
   )
