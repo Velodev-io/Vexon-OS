@@ -1,0 +1,13 @@
+# Redis
+/dump.rdb
+
+# Node
+/package-lock.json
+
+# OS / IDE
+.DS_Store
+.vscode/
+
+# Python
+.venv/
+__pycache__/
