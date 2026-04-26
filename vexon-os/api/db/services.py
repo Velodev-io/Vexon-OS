@@ -74,6 +74,13 @@ def get_or_create_session_record(
     return session
 
 
+def get_session_for_user(db: DBSession, user_id: str, session_id: str) -> SessionModel | None:
+    session = db.get(SessionModel, session_id)
+    if session is None or session.user_id != user_id:
+        return None
+    return session
+
+
 def list_sessions_for_user(db: DBSession, user_id: str, limit: int = 50) -> list[SessionModel]:
     return (
         db.query(SessionModel)

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { getToken, logout } from './auth'
 
-const defaultApiBase = `http://192.168.1.33:8000`
+const defaultApiBase = `http://${window.location.hostname}:8000`
 export const API_BASE_URL = import.meta.env.VITE_API_URL ?? defaultApiBase
 
 const api = axios.create({

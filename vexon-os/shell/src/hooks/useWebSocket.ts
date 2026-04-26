@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { API_BASE_URL } from '../lib/api'
 import { useStreamStore } from '../store/streamStore'
 import { getToken } from '../lib/auth'
 
@@ -6,48 +7,71 @@ export const useWebSocket = (sessionId: string) => {
   const [isConnected, setIsConnected] = useState(false)
   const ws = useRef<WebSocket | null>(null)
   const addEvent = useStreamStore(state => state.addEvent)
+  const token = getToken()
 
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !token) {
+      setIsConnected(false)
+      return
+    }
 
     let cancelled = false
     let retryHandle: number | null = null
+    let retryDelayMs = 1000
 
     const connect = async () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const apiHost = window.location.hostname
-      const token = getToken()
-      const params = token ? `?token=${encodeURIComponent(token)}` : ''
-      const url = `${protocol}//${apiHost}:8000/ws/${sessionId}${params}`
+      const apiUrl = new URL(API_BASE_URL)
+      const protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:'
+      const url = `${protocol}//${apiUrl.host}/ws/${sessionId}?token=${encodeURIComponent(token)}`
 
       if (cancelled) {
         return
       }
-      
-      console.log(`Connecting to WebSocket: ${url}`);
-      ws.current = new WebSocket(url)
 
-      ws.current.onopen = () => {
+      const socket = new WebSocket(url)
+      ws.current = socket
+
+      socket.onopen = () => {
+        if (ws.current !== socket || cancelled) {
+          socket.close()
+          return
+        }
+        retryDelayMs = 1000
         setIsConnected(true)
-        console.log('WS Connected')
       }
 
-      ws.current.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (ws.current !== socket || cancelled) {
+          return
+        }
         try {
           const data = JSON.parse(event.data)
+          if (data?.type === 'ping') {
+            return
+          }
+          if (data?.session_id && data.session_id !== sessionId) {
+            return
+          }
           addEvent(data)
         } catch (e) {
           console.error('Failed to parse WS message', e)
         }
       }
 
-      ws.current.onclose = () => {
+      socket.onerror = () => {
         setIsConnected(false)
-        console.log('WS Disconnected, retrying in 3s...')
+      }
+
+      socket.onclose = () => {
+        if (ws.current === socket) {
+          ws.current = null
+        }
         if (!cancelled) {
+          setIsConnected(false)
           retryHandle = window.setTimeout(() => {
             void connect()
-          }, 3000)
+          }, retryDelayMs)
+          retryDelayMs = Math.min(retryDelayMs * 2, 5000)
         }
       }
     }
@@ -62,9 +86,10 @@ export const useWebSocket = (sessionId: string) => {
       if (ws.current) {
         ws.current.onclose = null
         ws.current.close()
+        ws.current = null
       }
     }
-  }, [sessionId, addEvent])
+  }, [sessionId, addEvent, token])
 
   const sendMessage = (message: any) => {
     if (ws.current?.readyState === WebSocket.OPEN) {

@@ -79,7 +79,7 @@ class ResearcherAgent(BaseAgent):
             self.queries_used.append(query)
 
             # ── TOOL_CALL ─────────────────────────────────────────────
-            self.publish_event("TOOL_CALL", {"tool": "web_search", "input": query})
+            self.publish_event("TOOL_CALL", {"tool": "web_search", "input": {"query": query}})
             self.set_status(AgentStatus.TOOL_CALLING)
 
             # Execute the web search

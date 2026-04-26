@@ -5,6 +5,7 @@ from enum import Enum
 from datetime import datetime
 import os
 import redis
+from json import JSONDecodeError
 
 logger = logging.getLogger(__name__)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0").replace("CERT_NONE", "none")
@@ -77,6 +78,7 @@ class BaseAgent:
         import tools.memory_tool
         from tools.registry import list_tools, get_tool
 
+        self.publish_event("AGENT_START", {"agent_type": "AGENT", "goal": intent.get("description", self.goal)})
         memory_context = await self.load_memory()
         self.set_status(AgentStatus.THINKING)
         self.trace.append({"step": "thinking", "content": f"Analyzing goal: {self.goal}"})
@@ -123,6 +125,7 @@ Provide a helpful, concise, and technical final response.
         ]
 
         max_iterations = 5
+        final_text = ""
         for i in range(max_iterations):
             self.set_status(AgentStatus.THINKING)
 
@@ -161,7 +164,7 @@ Provide a helpful, concise, and technical final response.
                     # Parse tool call
                     tool_json_str = tool_json_str.replace("</tool>", "").strip()
                     try:
-                        tool_call = json.loads(tool_json_str)
+                        tool_call = self._parse_tool_call(tool_json_str)
                         tool_name = tool_call.get("name")
                         tool_input = tool_call.get("input", {})
 
@@ -189,13 +192,15 @@ Provide a helpful, concise, and technical final response.
                         messages.append({"role": "assistant", "content": f"<tool>\n{tool_json_str}\n</tool>"})
                         messages.append({"role": "user", "content": f"Tool Result:\n{result}"})
 
-                    except json.JSONDecodeError as e:
+                    except (json.JSONDecodeError, ValueError) as e:
                         logger.error(f"Failed to parse tool JSON: {tool_json_str}")
-                        messages.append({"role": "assistant", "content": buffer})
+                        messages.append({"role": "assistant", "content": f"<tool>\n{tool_json_str}\n</tool>"})
                         messages.append({"role": "user", "content": "Error: Invalid JSON tool call format. Please try again."})
                 else:
                     # Final answer completed
                     final_text = full_response or buffer
+                    if not final_text.strip():
+                        raise RuntimeError("The model returned an empty response.")
                     messages.append({"role": "assistant", "content": final_text})
                     await self.save_memory(final_text.strip(), "result")
                     break
@@ -206,6 +211,12 @@ Provide a helpful, concise, and technical final response.
                 self.publish_event("error", {"message": str(e)})
                 raise e
 
+        if not final_text.strip():
+            final_text = await self._fallback_direct_answer(intent, messages)
+            self.set_status(AgentStatus.STREAMING)
+            self.publish_event("stream_token", {"token": final_text})
+            await self.save_memory(final_text.strip(), "result")
+
         self.set_status(AgentStatus.DONE)
         self.publish_event("DONE", {"sources": [], "queries_used": []})
         return {"result": "success", "agent_id": self.agent_id}
@@ -215,6 +226,49 @@ Provide a helpful, concise, and technical final response.
         payload = {
             "type": event_type,
             "agent_id": self.agent_id,
+            "session_id": self.session_id,
             "data": data
         }
-        self.redis_client.publish(channel, json.dumps(payload))
+        try:
+            self.redis_client.publish(channel, json.dumps(payload))
+        except Exception as exc:
+            logger.warning("Failed to publish event for session %s: %s", self.session_id, exc)
+
+    def _parse_tool_call(self, raw_text: str) -> dict:
+        try:
+            parsed = json.loads(raw_text)
+        except JSONDecodeError:
+            parsed = None
+
+        if parsed is None:
+            start = raw_text.find("{")
+            end = raw_text.rfind("}")
+            if start == -1 or end == -1 or end <= start:
+                raise ValueError("Tool call did not contain a JSON object.")
+            parsed = json.loads(raw_text[start:end + 1])
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Tool call payload must be a JSON object.")
+        if "name" not in parsed or "input" not in parsed:
+            raise ValueError("Tool call payload must include 'name' and 'input'.")
+        return parsed
+
+    async def _fallback_direct_answer(self, intent: dict, messages: list[dict]) -> str:
+        fallback_prompt = """You are a kernel agent in Vexon OS.
+Answer the user's request directly in plain text.
+Do not use tool tags.
+Do not describe tools unless the user explicitly asked for them.
+"""
+        fallback_messages = messages + [
+            {
+                "role": "user",
+                "content": (
+                    "Your previous attempts did not produce a valid final answer. "
+                    f"Please answer this request directly:\n{intent.get('description', self.goal)}"
+                ),
+            }
+        ]
+        result = await call_with_fallback(fallback_messages, system=fallback_prompt, stream=False)
+        if not isinstance(result, str) or not result.strip():
+            raise RuntimeError("The model returned an empty fallback response.")
+        return result.strip()

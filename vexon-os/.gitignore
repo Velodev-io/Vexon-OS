@@ -37,6 +37,10 @@ redis_data/
 
 # Logs
 *.log
+logs/
 api/logs/
 worker_error.log
 api/celery_error.log
+
+# Local databases
+*.db

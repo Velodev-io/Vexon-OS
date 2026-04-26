@@ -1,4 +1,6 @@
 import os
+from typing import Awaitable, Callable
+
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -120,25 +122,52 @@ def summarize_session(user_id: str, session_id: str, llm_call=None):
         summary,
         metadata={"session_id": session_id, "type": "session_summary"},
     )
-    if embedding is None:
-        return store_longterm(user_id, content, metadata=metadata)
+    return summary
 
-    if not client:
-        return
 
-    ensure_collection()
-    payload = {"user_id": str(user_id), "text": content, **(metadata or {})}
-    vector = embedding.tolist() if hasattr(embedding, "tolist") else embedding
-    client.upsert(
-        collection_name=COLLECTION_NAME,
-        points=[
-            models.PointStruct(
-                id=os.urandom(16).hex(),
-                vector=vector,
-                payload=payload,
-            )
-        ],
+async def summarize_session_async(
+    user_id: str,
+    session_id: str,
+    llm_call: Callable[[list[dict]], Awaitable[str]] | None = None,
+):
+    from memory.working import load_session_memories
+
+    entries = load_session_memories(session_id, user_id, limit=50)
+    if not entries:
+        return None
+
+    text_parts = [
+        f"[{e.get('type', 'memory')}] {e.get('content', '')}"
+        for e in entries
+        if e.get("content")
+    ]
+    if not text_parts:
+        return None
+
+    combined = "\n".join(text_parts)
+    summary = combined[:2000]
+
+    if llm_call is not None:
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    "Summarize the following agent session memories into a concise paragraph "
+                    "capturing key facts, decisions, and results:\n\n" + combined[:4000]
+                ),
+            }
+        ]
+        try:
+            summary = await llm_call(messages)
+        except Exception:
+            summary = combined[:2000]
+
+    store_longterm(
+        user_id,
+        summary,
+        metadata={"session_id": session_id, "type": "session_summary"},
     )
+    return summary
 
 
 def search_memory(user_id, query_embedding=None, top_k=5, query=None):

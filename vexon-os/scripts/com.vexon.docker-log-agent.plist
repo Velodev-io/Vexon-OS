@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.vexon.docker-log-agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/yashswisingh/Sur Projects/Vexon-OS/vexon-os/scripts/docker_log_agent_daemon.py</string>
+    <string>--interval</string>
+    <string>60</string>
+    <string>--tail</string>
+    <string>160</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/yashswisingh/Sur Projects/Vexon-OS/vexon-os</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/yashswisingh/Sur Projects/Vexon-OS/vexon-os/logs/docker-log-agent/launchd.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/yashswisingh/Sur Projects/Vexon-OS/vexon-os/logs/docker-log-agent/launchd.err.log</string>
+</dict>
+</plist>

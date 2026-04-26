@@ -29,7 +29,8 @@ def get_perplexity_client():
     return AsyncOpenAI(api_key=api_key, base_url="https://api.perplexity.ai") if api_key else None
 
 def get_ollama_client():
-    return os.getenv("OLLAMA_BASE_URL")
+    base_url = os.getenv("OLLAMA_BASE_URL")
+    return base_url if base_url else None
 
 async def _call_groq(client, messages, system, stream):
     sys_msg = [{"role": "system", "content": system}] if system else []
@@ -113,14 +114,10 @@ async def _call_perplexity(client, messages, system, stream):
 
 import httpx
 
-def get_ollama_client():
-    base_url = os.getenv("OLLAMA_BASE_URL")
-    return base_url if base_url else None
-
 async def _call_ollama(base_url, messages, system, stream):
     import json
     sys_msg = [{"role": "system", "content": system}] if system else []
-    model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
     
     payload = {
         "model": model,
@@ -133,33 +130,36 @@ async def _call_ollama(base_url, messages, system, stream):
         async def generator():
             async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream("POST", f"{base_url}/api/chat", json=payload) as response:
+                    response.raise_for_status()
                     async for line in response.aiter_lines():
                         if line:
                             try:
                                 data = json.loads(line)
                                 if "message" in data and "content" in data["message"]:
                                     yield data["message"]["content"]
-                            except:
+                            except json.JSONDecodeError:
                                 continue
         return generator()
     else:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(f"{base_url}/api/chat", json=payload)
+            response.raise_for_status()
             data = response.json()
             return data["message"]["content"]
     
-async def call_with_fallback(messages: List[Dict[str, str]], system: str = None, stream: bool = False) -> Union[str, AsyncGenerator[str, None]]:
-    providers = [
+def _provider_specs():
+    return [
         ("Ollama", get_ollama_client, _call_ollama),
         ("Groq", get_groq_client, _call_groq),
         ("Gemini", get_gemini_client, _call_gemini),
         ("Claude", get_anthropic_client, _call_anthropic),
-        ("Perplexity", get_perplexity_client, _call_perplexity)
+        ("Perplexity", get_perplexity_client, _call_perplexity),
     ]
-    
+
+async def call_with_fallback(messages: List[Dict[str, str]], system: str = None, stream: bool = False) -> Union[str, AsyncGenerator[str, None]]:
     last_error = None
-    
-    for provider_name, get_client_func, call_func in providers:
+
+    for provider_name, get_client_func, call_func in _provider_specs():
         try:
             client = get_client_func()
             if not client:

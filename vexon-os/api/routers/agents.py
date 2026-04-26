@@ -8,9 +8,7 @@ from core.rate_limit import limiter
 from db.database import get_db
 from services.agent_service import dispatch_intent
 
-
-# BYPASS AUTH - Commenting out verify_token for testing
-router = APIRouter(tags=["agents"]) # dependencies=[Depends(verify_token)]
+router = APIRouter(tags=["agents"])
 
 
 class IntentRequest(BaseModel):
@@ -25,14 +23,9 @@ class IntentRequest(BaseModel):
 async def handle_intent(
     request: Request,
     payload: IntentRequest = Body(...),
-    # BYPASS AUTH
-    # user: dict = Depends(verify_token),
-    user: dict = None,
+    user: dict = Depends(verify_token),
     db=Depends(get_db),
 ):
-    # Mock user for testing
-    if user is None:
-        user = {"sub": "suryansh"}
     return await dispatch_intent(
         db=db,
         user=user,

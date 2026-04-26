@@ -3,11 +3,14 @@ import json
 import logging
 import os
 from typing import Optional
+
 import redis.asyncio as redis
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
 
 from auth.local import decode_token
+from db.database import SessionLocal
+from db.services import get_session_for_user
 
 logger = logging.getLogger(__name__)
 redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0").replace("CERT_NONE", "none")
@@ -28,11 +31,21 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     if not token:
         await websocket.close(code=4401)
         return
+
     try:
-        decode_token(token)
+        claims = decode_token(token)
     except HTTPException:
         await websocket.close(code=4401)
         return
+
+    db = SessionLocal()
+    try:
+        session = get_session_for_user(db, claims["sub"], session_id)
+        if session is None:
+            await websocket.close(code=4404)
+            return
+    finally:
+        db.close()
 
     await websocket.accept()
     logger.info(f"WebSocket connected for session {session_id}")

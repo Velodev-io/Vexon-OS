@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 ALGORITHM = "HS256"
 TOKEN_TTL_DAYS = 30
 
-bearer_scheme = HTTPBearer(auto_error=False)
+bearer_scheme = HTTPBearer(auto_error=True)
 
 
 def _get_secret() -> str:

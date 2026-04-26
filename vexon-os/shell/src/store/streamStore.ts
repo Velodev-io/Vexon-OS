@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 interface AgentEvent {
   type: string
   agent_id: string
+  session_id?: string
   data: any
   timestamp: number
 }
@@ -48,6 +49,10 @@ export const useStreamStore = create<StreamState>()(
       sessions: [],
       activeSessionId: null,
       addEvent: (eventData) => set((state) => {
+        if (eventData.session_id && state.activeSessionId && eventData.session_id !== state.activeSessionId) {
+          return state
+        }
+
         const event = { ...eventData, timestamp: Date.now() }
         const agentId = event.agent_id
         const currentAgent = state.activeAgents[agentId] || {
@@ -111,7 +116,6 @@ export const useStreamStore = create<StreamState>()(
       name: 'vexon-stream-store',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        sessions: state.sessions,
         activeSessionId: state.activeSessionId,
       }),
     }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { History, Cpu, Database, ChevronLeft, ChevronRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 import api from '../lib/api'
+import { getToken } from '../lib/auth'
 import { useStreamStore } from '../store/streamStore'
 
 function formatTime(value: string | null) {
@@ -25,6 +26,8 @@ function formatTime(value: string | null) {
 const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState('sessions')
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false)
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const sessions = useStreamStore((state) => state.sessions)
   const activeSessionId = useStreamStore((state) => state.activeSessionId)
   const setSessions = useStreamStore((state) => state.setSessions)
@@ -34,32 +37,48 @@ const Sidebar = () => {
     let cancelled = false
 
     const loadSessions = async () => {
-      if (!localStorage.getItem('vexon_token')) {
+      setIsLoadingSessions(true)
+      setSessionError(null)
+      if (!getToken()) {
         if (!cancelled) {
           setSessions([])
+          setIsLoadingSessions(false)
         }
         return
       }
 
-      const { data } = await api.get('/sessions')
-      if (cancelled) {
-        return
-      }
-
-      if (data.length > 0) {
-        setSessions(data)
-        if (!activeSessionId) {
-          setActiveSession(data[0].session_id)
+      try {
+        const { data } = await api.get('/sessions')
+        if (cancelled) {
+          return
         }
-        return
-      }
+        const orderedSessions = Array.isArray(data) ? data : []
+        if (orderedSessions.length > 0) {
+          setSessions(orderedSessions)
+          const hasActiveSession = orderedSessions.some((session: any) => session.session_id === activeSessionId)
+          if (!hasActiveSession) {
+            setActiveSession(orderedSessions[0].session_id)
+          }
+          return
+        }
 
-      const { data: session } = await api.post('/sessions', { title: 'New session' })
-      if (cancelled) {
-        return
+        const { data: session } = await api.post('/sessions', {
+          title: 'New session',
+        })
+        if (!cancelled) {
+          setSessions([session])
+          setActiveSession(session.session_id)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSessionError('Unable to load sessions.')
+          setSessions([])
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingSessions(false)
+        }
       }
-      setSessions([session])
-      setActiveSession(session.session_id)
     }
 
     void loadSessions()
@@ -104,9 +123,21 @@ const Sidebar = () => {
             <div className="space-y-4">
               <h3 className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em] px-2">Recent Sessions</h3>
               <div className="space-y-2">
+                {isLoadingSessions && (
+                  <div className="p-3 rounded-xl border border-white/5 bg-white/[0.02]">
+                    <p className="text-xs font-medium text-white/60">Loading sessions...</p>
+                  </div>
+                )}
+                {sessionError && (
+                  <div className="p-3 rounded-xl border border-red-500/20 bg-red-500/5">
+                    <p className="text-xs font-medium text-red-300">{sessionError}</p>
+                  </div>
+                )}
                 {sessions.length === 0 && (
                   <div className="p-3 rounded-xl border border-white/5 bg-white/[0.02]">
-                    <p className="text-xs font-medium text-white/60">Sign in to load sessions.</p>
+                    <p className="text-xs font-medium text-white/60">
+                      {getToken() ? 'No sessions yet.' : 'Sign in to load sessions.'}
+                    </p>
                   </div>
                 )}
                 {sessions.map((session) => (

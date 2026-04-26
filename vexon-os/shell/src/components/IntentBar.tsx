@@ -1,18 +1,20 @@
 import React, { useState } from 'react'
 import { Send, Mic, Paperclip, Terminal as TerminalIcon } from 'lucide-react'
 import api from '../lib/api'
+import { useStreamStore } from '../store/streamStore'
 
 const IntentBar = ({ sessionId }: { sessionId: string }) => {
   const [value, setValue] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const clearEvents = useStreamStore((state) => state.clearEvents)
+  const addEvent = useStreamStore((state) => state.addEvent)
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
     if (!value.trim() || isLoading) return
 
-    const userId = localStorage.getItem('vexon_user_id')
-    if (!userId) {
+    if (!sessionId) {
       setError('Not logged in')
       return
     }
@@ -20,11 +22,32 @@ const IntentBar = ({ sessionId }: { sessionId: string }) => {
     setIsLoading(true)
     setError(null)
     try {
-      await api.post('/agent/run', {
+      clearEvents()
+      const { data } = await api.post('/agent/run', {
         message: value,
         session_id: sessionId,
-        user_id: userId,
       })
+      if (data.answer) {
+        const agentId = data.agent_id || data.task_id || crypto.randomUUID()
+        addEvent({
+          type: 'AGENT_START',
+          agent_id: agentId,
+          session_id: sessionId,
+          data: { agent_type: 'AGENT', goal: value },
+        })
+        addEvent({
+          type: 'stream_token',
+          agent_id: agentId,
+          session_id: sessionId,
+          data: { token: data.answer },
+        })
+        addEvent({
+          type: 'DONE',
+          agent_id: agentId,
+          session_id: sessionId,
+          data: { sources: [], queries_used: [] },
+        })
+      }
       setValue('')
     } catch (error) {
       console.error('Failed to submit intent', error)
